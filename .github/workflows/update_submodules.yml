@@ -1,0 +1,51 @@
+name: Update submodules ref
+
+on:
+  repository_dispatch:
+    types: [update-submodule]
+
+jobs:
+  update-submodule:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main repo with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update ref for triggered submodule
+        run: |
+          echo "Submodule to update: ${{ github.event.client_payload.submodule }}"
+          
+          if [ -d "${{ github.event.client_payload.submodule }}" ]; then
+            cd "${{ github.event.client_payload.submodule }}"
+            git fetch origin main
+            git checkout origin/main
+            cd ../
+
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add "${{ github.event.client_payload.submodule }}"
+          else
+            echo "Directory ${{ github.event.client_payload.submodule }} not found, skipping submodule update..."
+            exit 0
+          fi
+
+      - name: Create Pull Request      
+        id: cpr
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update submodule ${{ github.event.client_payload.submodule }}"
+          branch: update-submodule-${{ github.event.client_payload.submodule }}
+          title: "chore: update submodule ${{ github.event.client_payload.submodule }}"
+          body: "This PR updates the submodule reference to the latest HEAD."
+          auto-merge: true
+
+      - name: Auto-approve PR
+        uses: hmarr/auto-approve-action@v3
+        with:
+          github-token: ${{ secrets.PAT }}
+          pull-request-number: ${{ steps.cpr.outputs.pull-request-number }}
